@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>NEET Smart Study Planner</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+<style>
+:root {
+  --primary:#2563eb;
+  --bg:#f1f5f9;
+  --card:#ffffff;
+}
+
+body {
+  margin:0;
+  font-family: "Segoe UI", sans-serif;
+  background:var(--bg);
+}
+
+nav {
+  background:var(--primary);
+  padding:12px;
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+}
+
+nav button {
+  background:white;
+  border:none;
+  padding:8px 14px;
+  border-radius:20px;
+  cursor:pointer;
+  font-weight:600;
+}
+
+.page { display:none; padding:20px; }
+.active { display:block; }
+
+.card {
+  background:var(--card);
+  padding:15px;
+  border-radius:12px;
+  margin-bottom:12px;
+  box-shadow:0 5px 15px rgba(0,0,0,0.05);
+}
+
+input, select {
+  padding:8px;
+  border-radius:8px;
+  border:1px solid #ccc;
+  margin:4px 0;
+}
+
+button.action {
+  background:var(--primary);
+  color:white;
+  border:none;
+  padding:8px 14px;
+  border-radius:8px;
+  cursor:pointer;
+}
+
+.todo-item {
+  border-left:5px solid var(--primary);
+  padding-left:10px;
+}
+
+.timer {
+  font-size:48px;
+  font-weight:bold;
+}
+
+.chat-box {
+  height:250px;
+  background:white;
+  border-radius:10px;
+  padding:10px;
+  overflow-y:auto;
+}
+</style>
+</head>
+
+<body>
+
+<nav>
+  <button onclick="showPage('todo')">To-Do</button>
+  <button onclick="showPage('analytics')">Analytics</button>
+  <button onclick="showPage('pomodoro')">Pomodoro</button>
+  <button onclick="showPage('chat')">Chat</button>
+</nav>
+
+<!-- ================= TO DO PAGE ================= -->
+<div id="todo" class="page active">
+<h1>📋 NEET To-Do Planner</h1>
+
+<div class="card">
+<select id="chapter">
+<option value="">Select Chapter</option>
+
+<optgroup label="Class 11 Physics">
+<option>Units & Measurements</option>
+<option>Kinematics</option>
+<option>Laws of Motion</option>
+<option>Work, Energy & Power</option>
+<option>Thermodynamics</option>
+<option>Oscillations & Waves</option>
+</optgroup>
+
+<optgroup label="Class 11 Chemistry">
+<option>Some Basic Concepts of Chemistry</option>
+<option>Structure of Atom</option>
+<option>Chemical Bonding</option>
+<option>Thermodynamics</option>
+<option>Hydrocarbons</option>
+</optgroup>
+
+<optgroup label="Class 11 Biology">
+<option>Cell Structure</option>
+<option>Biomolecules</option>
+<option>Plant Physiology</option>
+<option>Human Physiology</option>
+</optgroup>
+
+<optgroup label="Class 12 Physics">
+<option>Electrostatics</option>
+<option>Current Electricity</option>
+<option>Magnetic Effects</option>
+<option>Optics</option>
+<option>Atoms & Nuclei</option>
+</optgroup>
+
+<optgroup label="Class 12 Chemistry">
+<option>Solid State</option>
+<option>Electrochemistry</option>
+<option>Chemical Kinetics</option>
+<option>Coordination Compounds</option>
+<option>Biomolecules</option>
+</optgroup>
+
+<optgroup label="Class 12 Biology">
+<option>Reproduction</option>
+<option>Genetics</option>
+<option>Evolution</option>
+<option>Biotechnology</option>
+<option>Ecology</option>
+</optgroup>
+</select>
+
+<input id="task" placeholder="Task (eg. NCERT + 100 MCQs)">
+<br>
+<button class="action" onclick="addTodo()">Add Task</button>
+</div>
+
+<div id="todoList"></div>
+</div>
+
+<!-- ================= ANALYTICS ================= -->
+<div id="analytics" class="page">
+<h1>📊 Study Analytics</h1>
+<canvas id="weeklyChart"></canvas>
+<br>
+<canvas id="monthlyChart"></canvas>
+</div>
+
+<!-- ================= POMODORO ================= -->
+<div id="pomodoro" class="page">
+<h1>⏱️ Pomodoro Focus Timer</h1>
+<div class="timer" id="timer">25:00</div>
+<button class="action" onclick="start()">Start</button>
+<button class="action" onclick="breakTime()">Break</button>
+<button class="action" onclick="reset()">Reset</button>
+</div>
+
+<!-- ================= CHAT ================= -->
+<div id="chat" class="page">
+<h1>💬 Study Chat (4 Users)</h1>
+<div class="chat-box" id="chatBox"></div>
+<input id="name" placeholder="Your name">
+<input id="message" placeholder="Message">
+<button class="action" onclick="sendMessage()">Send</button>
+</div>
+
+<script>
+/* ---------- NAV ---------- */
+function showPage(id){
+ document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+ document.getElementById(id).classList.add('active');
+}
+
+/* ---------- TODO ---------- */
+function addTodo(){
+ let chapter=document.getElementById('chapter').value;
+ let task=document.getElementById('task').value;
+ if(!chapter||!task)return;
+
+ let div=document.createElement('div');
+ div.className='card todo-item';
+ div.innerHTML=`<b>${chapter}</b><p>${task}</p>
+ <small>✔ Revision | ✔ Practice | ✔ Theory</small>`;
+ document.getElementById('todoList').appendChild(div);
+}
+
+/* ---------- POMODORO ---------- */
+let time=1500, interval;
+function update(){ 
+ document.getElementById('timer').innerText=
+ `${Math.floor(time/60)}:${(time%60).toString().padStart(2,'0')}`;}
+function start(){
+ if(interval)return;
+ interval=setInterval(()=>{ if(time<=0){clearInterval(interval);interval=null;alert('Session Done');}
+ time--; update();},1000);
+}
+function breakTime(){ time=300; update(); }
+function reset(){ clearInterval(interval); interval=null; time=1500; update(); }
+
+/* ---------- ANALYTICS ---------- */
+new Chart(document.getElementById('weeklyChart'),{
+ type:'bar',
+ data:{labels:['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],
+ datasets:[{label:'Study Hours',data:[2,3,4,5,3,6,4]}]}
+});
+
+new Chart(document.getElementById('monthlyChart'),{
+ type:'line',
+ data:{labels:['Week1','Week2','Week3','Week4'],
+ datasets:[{label:'Progress',data:[20,45,70,90]}]}
+});
+
+/* ---------- FIREBASE CHAT ---------- */
+// 🔴 PASTE YOUR FIREBASE CONFIG HERE
+const firebaseConfig = {
+  apiKey: \"YOUR_KEY\",
+  authDomain: \"YOUR_PROJECT.firebaseapp.com\",
+  databaseURL: \"https://YOUR_PROJECT.firebaseio.com\",
+  projectId: \"YOUR_PROJECT\"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db=firebase.database();
+
+function sendMessage(){
+ let name=document.getElementById('name').value||'User';
+ let msg=document.getElementById('message').value;
+ db.ref('chat').push({name,msg});
+ document.getElementById('message').value='';
+}
+
+db.ref('chat').limitToLast(50).on('child_added',s=>{
+ let d=s.val();
+ let div=document.createElement('div');
+ div.textContent=d.name+': '+d.msg;
+ document.getElementById('chatBox').appendChild(div);
+});
+</script>
+
+</body>
+</html>
